@@ -1,0 +1,100 @@
+name: Release plugin ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release asset
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Read plugin metadata
+        id: plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          component=$(awk -F"'" '/\$plugin->component[[:space:]]*=/{print $2; exit}' version.php)
+          release=$(awk -F"'" '/\$plugin->release[[:space:]]*=/{print $2; exit}' version.php)
+
+          if [ "$component" != "mod_certifier" ]; then
+            echo "Unexpected plugin component: $component" >&2
+            exit 1
+          fi
+
+          if [ -z "$release" ]; then
+            echo "Could not read plugin release from version.php" >&2
+            exit 1
+          fi
+
+          expected_tag="v$release"
+          if [ "${GITHUB_REF_NAME}" != "$expected_tag" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match version.php release $release (expected $expected_tag)" >&2
+            exit 1
+          fi
+
+          if [[ "$release" =~ (alpha|beta|rc|dev) ]]; then
+            prerelease=true
+          else
+            prerelease=false
+          fi
+
+          echo "component=$component" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "zipname=$component-$release.zip" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Build installable ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+          git archive \
+            --format=zip \
+            --prefix=certifier/ \
+            --output="dist/${{ steps.plugin.outputs.zipname }}" \
+            HEAD
+
+      - name: Validate ZIP contents
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          zip="dist/${{ steps.plugin.outputs.zipname }}"
+
+          test -f "$zip"
+          zipinfo -1 "$zip" | grep -qx 'certifier/version.php'
+          zipinfo -1 "$zip" | grep -qx 'certifier/lang/en/certifier.php'
+          zipinfo -1 "$zip" | grep -qx 'certifier/db/install.xml'
+          zipinfo -1 "$zip" | grep -qx 'certifier/db/upgrade.php'
+
+          if zipinfo -1 "$zip" | grep -Eq '^certifier/(\.github/|\.gitattributes$|\.gitignore$)'; then
+            echo "ZIP contains repository-only files" >&2
+            zipinfo -1 "$zip" | grep -E '^certifier/(\.github/|\.gitattributes$|\.gitignore$)' >&2
+            exit 1
+          fi
+
+          top_level_count=$(zipinfo -1 "$zip" | awk -F/ '{print $1}' | sort -u | wc -l | tr -d ' ')
+          if [ "$top_level_count" != "1" ]; then
+            echo "ZIP must contain exactly one top-level directory" >&2
+            zipinfo -1 "$zip" | head -50 >&2
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.plugin.outputs.release }}
+          prerelease: ${{ steps.plugin.outputs.prerelease }}
+          files: dist/${{ steps.plugin.outputs.zipname }}
+          fail_on_unmatched_files: true
