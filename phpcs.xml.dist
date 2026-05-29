@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="mod_certifier">
+  <description>Moodle coding standard checks for the Certifier activity module.</description>
+
+  <file>.</file>
+
+  <arg name="extensions" value="php"/>
+
+  <exclude-pattern>vendor/*</exclude-pattern>
+  <exclude-pattern>node_modules/*</exclude-pattern>
+
+  <rule ref="moodle-extra"/>
+</ruleset>
