@@ -25,6 +25,7 @@
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import Ajax from 'core/ajax';
 import {get_string as getString, get_strings as getStrings} from 'core/str';
 
 const SOURCE_KEYS = [
@@ -55,9 +56,8 @@ const SOURCE_VALUES = [
  * Initialise the form options loader.
  *
  * @param {number} courseid Current course id.
- * @param {string} sesskey  Current Moodle session key.
  */
-export const init = async(courseid, sesskey) => {
+export const init = async(courseid) => {
     const hiddenGroupId = document.querySelector('input[type="hidden"][name="groupid"]');
     const groupLoader = document.querySelector('[data-region="certifier-group-loader"]');
     const attributeLoader = document.querySelector('[data-region="certifier-customattributes-loader"]');
@@ -71,8 +71,8 @@ export const init = async(courseid, sesskey) => {
     setLoader(attributeLoader, loadingLabel);
 
     const [groupsResponse, attributesResponse] = await Promise.all([
-        fetchOptions(courseid, sesskey, 'groups'),
-        fetchOptions(courseid, sesskey, 'attributes'),
+        fetchOptions(courseid, 'mod_certifier_get_groups'),
+        fetchOptions(courseid, 'mod_certifier_get_custom_attributes'),
     ]);
 
     if (!groupsResponse.configured) {
@@ -96,28 +96,18 @@ const setLoader = (region, message) => {
 };
 
 /**
- * Fetch one set of options from the Certifier AJAX endpoint.
+ * Fetch one set of options from a Certifier external service.
  *
  * @param {number} courseid Course id.
- * @param {string} sesskey Session key.
- * @param {string} action  Endpoint action.
- * @returns {Promise<object>} Parsed JSON response.
+ * @param {string} methodname External service method name.
+ * @returns {Promise<object>} Parsed service response.
  */
-const fetchOptions = async(courseid, sesskey, action) => {
-    const url = new URL(M.cfg.wwwroot + '/mod/certifier/ajax.php');
-    url.searchParams.set('courseid', String(courseid));
-    url.searchParams.set('action', action);
-    url.searchParams.set('sesskey', sesskey);
-
+const fetchOptions = async(courseid, methodname) => {
     try {
-        const response = await fetch(url.toString(), {
-            credentials: 'same-origin',
-            headers: {'Accept': 'application/json'},
-        });
-        if (!response.ok) {
-            return {configured: true, error: 'HTTP ' + response.status, data: []};
-        }
-        return await response.json();
+        return await Ajax.call([{
+            methodname,
+            args: {courseid},
+        }])[0];
     } catch (err) {
         return {configured: true, error: err.message || String(err), data: []};
     }
@@ -128,7 +118,7 @@ const fetchOptions = async(courseid, sesskey, action) => {
  * wire it to the hidden groupid input that mform actually persists.
  *
  * @param {Element} loader  Loader region that receives the visible select.
- * @param {object} response AJAX response.
+ * @param {object} response Service response.
  * @param {HTMLInputElement} hiddenGroupId Hidden input the value is written to.
  */
 const populateGroups = async(loader, response, hiddenGroupId) => {
@@ -161,7 +151,7 @@ const populateGroups = async(loader, response, hiddenGroupId) => {
  * Render per-attribute mapping selects and wire them to the hidden JSON field.
  *
  * @param {Element} container  Region that receives the rendered selects.
- * @param {object} response    AJAX response.
+ * @param {object} response    Service response.
  * @param {HTMLInputElement} hiddenInput Hidden JSON field updated on change.
  */
 const populateAttributes = async(container, response, hiddenInput) => {
