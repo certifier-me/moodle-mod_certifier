@@ -24,6 +24,7 @@
 
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->dirroot . '/mod/certifier/lib.php');
+require_once($CFG->libdir . '/completionlib.php');
 
 use mod_certifier\local\constants;
 use mod_certifier\local\issuer;
@@ -42,8 +43,7 @@ $PAGE->set_title(format_string($certifier->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
-$completion = new completion_info($course);
-$completion->set_module_viewed($cm);
+certifier_view($certifier, $course, $cm, $context);
 
 echo $OUTPUT->header();
 echo html_writer::start_div('mod-certifier-view');

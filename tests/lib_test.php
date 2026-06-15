@@ -40,6 +40,8 @@ use mod_certifier\local\constants;
  * @covers     ::certifier_update_instance
  * @covers     ::certifier_delete_instance
  * @covers     ::certifier_supports
+ * @covers     ::certifier_view
+ * @covers     \mod_certifier\event\course_module_viewed
  */
 final class lib_test extends \advanced_testcase {
     /**
@@ -117,6 +119,40 @@ final class lib_test extends \advanced_testcase {
         $this->assertFalse(\certifier_supports(FEATURE_GRADE_HAS_GRADE));
         $this->assertFalse(\certifier_supports(FEATURE_GRADE_OUTCOMES));
         $this->assertNull(\certifier_supports('unknown_feature'));
+    }
+
+    /**
+     * Viewing the activity triggers the course module viewed event.
+     */
+    public function test_view_triggers_course_module_viewed_event(): void {
+        $this->resetAfterTest(true);
+        $course = $this->getDataGenerator()->create_course(['enablecompletion' => 1]);
+        $user = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user->id, $course->id);
+        $this->setUser($user);
+
+        $instance = $this->getDataGenerator()->create_module('certifier', ['course' => $course->id]);
+        $cm = get_coursemodule_from_id('certifier', $instance->cmid, 0, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+
+        $sink = $this->redirectEvents();
+        \certifier_view($instance, $course, $cm, $context);
+        $events = $sink->get_events();
+        $sink->close();
+
+        $viewevents = [];
+        foreach ($events as $event) {
+            if ($event instanceof \mod_certifier\event\course_module_viewed) {
+                $viewevents[] = $event;
+            }
+        }
+
+        $this->assertCount(1, $viewevents);
+        $event = reset($viewevents);
+        $this->assertEquals($instance->id, $event->objectid);
+        $this->assertEquals($course->id, $event->courseid);
+        $this->assertEquals($context->id, $event->contextid);
+        $this->assertEquals($cm->id, $event->contextinstanceid);
     }
 
     /**

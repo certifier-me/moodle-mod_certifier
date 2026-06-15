@@ -143,6 +143,29 @@ function certifier_get_coursemodule_info($coursemodule) {
 }
 
 /**
+ * Mark the activity viewed and trigger the course module viewed event.
+ *
+ * @param stdClass $certifier Certifier activity instance.
+ * @param stdClass $course Course record.
+ * @param stdClass $cm Course module record.
+ * @param context_module $context Module context.
+ * @return void
+ */
+function certifier_view($certifier, $course, $cm, $context) {
+    $event = \mod_certifier\event\course_module_viewed::create([
+        'context' => $context,
+        'objectid' => $certifier->id,
+    ]);
+    $event->add_record_snapshot('course_modules', $cm);
+    $event->add_record_snapshot('course', $course);
+    $event->add_record_snapshot('certifier', $certifier);
+    $event->trigger();
+
+    $completion = new completion_info($course);
+    $completion->set_module_viewed($cm);
+}
+
+/**
  * Translate a stored issuance status code into a learner-friendly label.
  *
  * @param string $status Stored issuance status code.
