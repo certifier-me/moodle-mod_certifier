@@ -131,7 +131,6 @@ class mod_certifier_mod_form extends moodleform_mod {
 
         $PAGE->requires->js_call_amd('mod_certifier/form_options', 'init', [
             (int) $course->id,
-            \sesskey(),
         ]);
     }
 
